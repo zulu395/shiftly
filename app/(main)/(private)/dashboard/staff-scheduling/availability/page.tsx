@@ -17,9 +17,9 @@ export default function AvailabilityPage() {
     );
 
     const { data: availabilityData, isLoading } = useQuery({
-        queryKey: ["availability"],
+        queryKey: ["availability", weekStart.toISOString()],
         queryFn: async () => {
-            const res = await $getEmployeesAndAvailability();
+            const res = await $getEmployeesAndAvailability(weekStart);
             if (res instanceof AppError) throw res;
             return res;
         },

@@ -4,7 +4,9 @@ import {
   WelcomeEmail,
   EventInvitationEmail,
   EmployeeInvitationEmail,
+  AvailabilityUpdateEmail,
 } from "@/emails";
+import { AvailabilityUpdateEmailParams } from "@/emails/AvailabilityUpdateEmail";
 import { EventInvitationEmailParams } from "@/emails/EventInvitationEmail";
 import { EmployeeInvitationEmailParams } from "@/emails/EmployeeInvitationEmail";
 import {
@@ -35,12 +37,11 @@ export type OrderEmailProps = {
 
 async function sendEmail(
   email: JSX.Element,
-  params: SendEmailParams
+  params: SendEmailParams,
 ): Promise<ServiceResponse<boolean>> {
   const body = await render(email);
   const res = await plunk.emails.send({
     ...params,
-    // from: process.env.NEXT_PUBLIC_WEBSITE_NAME ?? "Ecommerce Website",
     body,
   });
 
@@ -49,6 +50,7 @@ async function sendEmail(
 }
 
 export const EmailService = {
+  send: sendEmail,
   welcome: sendEmail.bind(null, WelcomeEmail()),
   passwordChanged: (props: { email: string }) =>
     sendEmail.bind(null, PasswordChangedEmail(props)),
@@ -63,4 +65,7 @@ export const EmailService = {
 
   employeeInvitation: (props: EmployeeInvitationEmailParams) =>
     sendEmail.bind(null, EmployeeInvitationEmail(props)),
+
+  availabilityUpdate: (props: AvailabilityUpdateEmailParams) =>
+    sendEmail.bind(null, AvailabilityUpdateEmail(props)),
 };

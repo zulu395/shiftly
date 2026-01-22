@@ -11,6 +11,7 @@ export interface IAvailabilityDay {
 export interface IAvailability extends Document {
   accountId: mongoose.Types.ObjectId;
   employeeId: mongoose.Types.ObjectId;
+  weekStartDate: Date;
   days: IAvailabilityDay[];
   lastUpdated: Date;
   createdAt: Date;
@@ -43,7 +44,10 @@ const AvailabilitySchema: Schema<IAvailability> = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Employee",
       required: true,
-      unique: true, // Assuming one availability per employee record
+    },
+    weekStartDate: {
+      type: Date,
+      required: true,
     },
     days: [AvailabilityDaySchema],
     lastUpdated: { type: Date, default: Date.now },
@@ -53,7 +57,7 @@ const AvailabilitySchema: Schema<IAvailability> = new Schema(
   },
 );
 
-AvailabilitySchema.index({ employeeId: 1 });
+AvailabilitySchema.index({ employeeId: 1, weekStartDate: 1 }, { unique: true });
 AvailabilitySchema.index({ accountId: 1 });
 
 const Availability: Model<IAvailability> =

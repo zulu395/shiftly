@@ -13,6 +13,10 @@ type CalendarCellProps = {
     onEditShift?: (shift: Shift) => void;
     additionalInfo?: React.ReactNode;
     className?: string;
+    availability?: {
+        isAvailable: boolean;
+        label?: string;
+    };
 };
 
 export default function CalendarCell({
@@ -24,6 +28,7 @@ export default function CalendarCell({
     className = "",
     currentEmployeeId,
     userRole,
+    availability,
 }: CalendarCellProps & { currentEmployeeId?: string; userRole?: string }) {
     const [isHovered, setIsHovered] = useState(false);
 
@@ -36,10 +41,22 @@ export default function CalendarCell({
 
     return (
         <div
-            className={`flex-1 px-2 py-3 border-l border-gray-200 ${className}`}
+            className={`flex-1 px-2 py-3 border-l border-gray-200 relative ${className} ${availability && !availability.isAvailable ? "bg-red-50/30" : ""}`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
         >
+            {/* Availability Indicator */}
+            {availability && !availability.isAvailable && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none overflow-hidden">
+                    <span className="transform -rotate-45 text-red-500 font-bold text-lg whitespace-nowrap">
+                        NOT AVAILABLE
+                    </span>
+                </div>
+            )}
+            {availability && availability.isAvailable && shifts.length === 0 && (
+                isHovered && <div className="absolute top-1 right-1 text-[10px] text-green-600/60 font-medium">Available: {availability.label}</div>
+            )}
+
             {/* Shift Cards */}
             {shifts.map((shift) => {
                 const isMyShift = currentEmployeeId && shift.employeeId === currentEmployeeId;

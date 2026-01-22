@@ -5,10 +5,13 @@ import Availability, {
 } from "@/server/models/Availability";
 import { AppError } from "@/utils/appError";
 
-const get = async (employeeId: string): Promise<IAvailability | null> => {
+const get = async (
+  employeeId: string,
+  weekStartDate: Date,
+): Promise<IAvailability | null> => {
   await connectDB();
   try {
-    const data = await Availability.findOne({ employeeId });
+    const data = await Availability.findOne({ employeeId, weekStartDate });
     return JSON.parse(JSON.stringify(data));
   } catch (error) {
     console.error("Error fetching availability:", error);
@@ -20,15 +23,17 @@ const update = async (
   accountId: string,
   employeeId: string,
   days: IAvailabilityDay[],
+  weekStartDate: Date,
 ): Promise<IAvailability> => {
   await connectDB();
   try {
     const data = await Availability.findOneAndUpdate(
-      { employeeId },
+      { employeeId, weekStartDate },
       {
         $set: {
           accountId, // Ensure accountID is set/updated
           days,
+          weekStartDate,
           lastUpdated: new Date(),
         },
       },
@@ -43,10 +48,14 @@ const update = async (
 
 const getForEmployees = async (
   employeeIds: string[],
+  weekStartDate: Date,
 ): Promise<IAvailability[]> => {
   await connectDB();
   try {
-    const data = await Availability.find({ employeeId: { $in: employeeIds } });
+    const data = await Availability.find({
+      employeeId: { $in: employeeIds },
+      weekStartDate,
+    });
     return JSON.parse(JSON.stringify(data));
   } catch (error) {
     console.error("Error fetching availabilities:", error);

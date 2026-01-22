@@ -4,15 +4,14 @@ import { $getAccountFromSession } from "@/actions/account/account";
 import { AvailabilityService } from "@/server/services/Availability";
 import { IAvailability, IAvailabilityDay } from "@/server/models/Availability";
 import { AppError } from "@/utils/appError";
-import { format } from "date-fns";
-import Employee, { IEmployeePopulated } from "@/server/models/Employee"; // Need to fetch Employee info
+import { format, startOfWeek } from "date-fns";
+import Employee, { IEmployeePopulated } from "@/server/models/Employee";
+import Account from "@/server/models/Account";
 import { connectDB } from "@/server/db/connect";
+import { EmailService } from "@/server/services/EmailService";
 
 async function getEmployeeForAccount(accountId: string) {
   await connectDB();
-  // Find an active employee record for this account
-  // If multiple, picking the first found active one? Or what logic?
-  // Ideally, use a context logic if available. For now, findOne.
   const employee = await Employee.findOne({
     account: accountId,
     status: { $ne: "deleted" },
@@ -20,7 +19,7 @@ async function getEmployeeForAccount(accountId: string) {
   return employee;
 }
 
-export async function $getAvailability() {
+export async function $getAvailability(weekDate?: string | Date) {
   const account = await $getAccountFromSession();
   if (account instanceof AppError || !account) {
     return new AppError("Unauthorized");
@@ -28,14 +27,20 @@ export async function $getAvailability() {
 
   const employee = await getEmployeeForAccount(String(account._id));
   if (!employee) {
-    // If no employee record found, maybe they are just an account without employee profile?
     return new AppError("Employee profile not found");
   }
 
-  return await AvailabilityService.get(String(employee._id));
+  // Default to current week if not provided
+  const targetDate = weekDate ? new Date(weekDate) : new Date();
+  const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
+
+  return await AvailabilityService.get(String(employee._id), weekStart);
 }
 
-export async function $updateAvailability(days: IAvailabilityDay[]) {
+export async function $updateAvailability(
+  days: IAvailabilityDay[],
+  weekDate?: string | Date,
+) {
   const account = await $getAccountFromSession();
   if (account instanceof AppError || !account) {
     return new AppError("Unauthorized");
@@ -46,11 +51,35 @@ export async function $updateAvailability(days: IAvailabilityDay[]) {
     return new AppError("Employee profile not found");
   }
 
-  return await AvailabilityService.update(
+  const targetDate = weekDate ? new Date(weekDate) : new Date();
+  const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
+
+  const result = await AvailabilityService.update(
     String(account._id),
     String(employee._id),
     days,
+    weekStart,
   );
+
+  // Send Email Notification to Company Admin
+  try {
+    const companyAccount = await Account.findById(employee.company);
+    if (companyAccount) {
+      await EmailService.availabilityUpdate({
+        employeeName: account.fullname,
+        weekDateString: format(weekStart, "PPP"),
+        dashboardLink: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/staff-scheduling`,
+      })({
+        to: companyAccount.email,
+        subject: `Availability Update: ${account.fullname}`,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to send availability update email:", error);
+    // Don't fail the request if email fails, just log it.
+  }
+
+  return result;
 }
 
 export async function $checkShiftConflicts(
@@ -70,9 +99,14 @@ export async function $checkShiftConflicts(
   }
 
   try {
-    const dayOfWeek = format(new Date(date), "EEEE");
-    const availabilities =
-      await AvailabilityService.getForEmployees(employeeIds);
+    const shiftDate = new Date(date);
+    const weekStart = startOfWeek(shiftDate, { weekStartsOn: 1 });
+    const dayOfWeek = format(shiftDate, "EEEE");
+
+    const availabilities = await AvailabilityService.getForEmployees(
+      employeeIds,
+      weekStart,
+    );
 
     let conflictCount = 0;
 
@@ -98,19 +132,10 @@ export async function $checkShiftConflicts(
       // 2. Check time range overlap
       if (startTime < dayConfig.startTime || endTime > dayConfig.endTime) {
         conflictCount++;
-        continue; // Conflict found, count and move to next emp
+        continue; // Conflict found
       }
 
       // 3. Check Location
-      // If employee is "Remote" and shift is "Onsite" -> Conflict
-      // If employee is "Onsite", we assume they can do Onsite. Can they do Remote? Maybe?
-      // Let's enforce strict match for now based on user request "check this".
-      // Actually, if availability is "Remote", they likely cannot be "Onsite".
-      // If availability is "Onsite", maybe they can handle Remote?
-      // But let's assume if shift is Remote and they are Onsite, it's fine?
-      // Or simply: Shift Location MUST === Availability Location?
-      // User said: "to match the employee availability locations".
-      // Let's assume strict equality for safety first.
       if (dayConfig.location && location && dayConfig.location !== location) {
         conflictCount++;
       }
@@ -124,8 +149,6 @@ export async function $checkShiftConflicts(
     }
 
     return { conflict: false, message: "" };
-
-    return { conflict: false, message: "" };
   } catch (error) {
     console.error("Conflict check error:", error);
     return { conflict: false, message: "" };
@@ -137,20 +160,17 @@ export type AvailabilityWithEmployee = {
   availability: IAvailability | null;
 };
 
-export async function $getCompanyAvailability(): Promise<
-  AvailabilityWithEmployee[] | AppError
-> {
+export async function $getCompanyAvailability(
+  weekDate?: string | Date,
+): Promise<AvailabilityWithEmployee[] | AppError> {
   const account = await $getAccountFromSession();
   if (account instanceof AppError || !account) {
     return new AppError("Unauthorized");
   }
 
-  // Ensure only Company role calls this (or Admin?)
-  // Assuming 'company' or similar role based on context found in other actions.
-  // Actually, getAllEmployees logic has custom checks.
-  // For now, assume if logged in as company, we fetch employees for that account (as company).
-
   const companyId = String(account._id);
+  const targetDate = weekDate ? new Date(weekDate) : new Date();
+  const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
 
   await connectDB();
 
@@ -160,15 +180,17 @@ export async function $getCompanyAvailability(): Promise<
       status: { $ne: "deleted" },
     })
       .populate("account")
-      .populate("company"); // To match PopulatedEmployee type broadly
+      .populate("company");
 
     if (!employees || employees.length === 0) {
       return [];
     }
 
     const employeeIds = employees.map((e) => e._id.toString());
-    const availabilities =
-      await AvailabilityService.getForEmployees(employeeIds);
+    const availabilities = await AvailabilityService.getForEmployees(
+      employeeIds,
+      weekStart,
+    );
 
     const result: AvailabilityWithEmployee[] = employees.map((e) => {
       const av = availabilities.find(

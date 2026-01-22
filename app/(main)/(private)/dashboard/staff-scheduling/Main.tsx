@@ -17,6 +17,7 @@ import type {
     ShiftStatus
 } from "@/types/schedule";
 import { $getAllEmployees } from "@/actions/employees/getAllEmployees";
+import { $getCompanyAvailability } from "@/actions/availability";
 import { $getShiftsByRange } from "@/actions/shifts/getShiftsByRange";
 import { AppError } from "@/utils/appError";
 import { PopulatedEmployee } from "@/types/employee";
@@ -83,6 +84,17 @@ export default function StaffSchedulingPageMain() {
             return res as ANY as IShift[];
         },
     });
+
+    const { data: availabilities } = useQuery({
+        queryKey: ["availability", weekStart.toISOString()],
+        queryFn: async () => {
+            const res = await $getCompanyAvailability(weekStart);
+            if (res instanceof AppError) return [];
+            return res;
+        },
+    });
+
+    // Helpers for time formatting
 
     // Helpers for time formatting
     const safeFormatTime = (timeStr: string) => {
@@ -274,6 +286,10 @@ export default function StaffSchedulingPageMain() {
                     onEditShift={handleShiftClick}
                     currentEmployeeId={currentEmployeeId}
                     userRole={account?.role}
+                    availabilities={availabilities?.map((a: ANY) => ({
+                        employeeId: a.employee._id.toString(),
+                        availability: a.availability,
+                    }))}
                 />
             </section>
 

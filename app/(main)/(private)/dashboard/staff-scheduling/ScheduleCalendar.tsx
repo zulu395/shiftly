@@ -4,6 +4,7 @@ import type { Employee, Shift } from "@/types/schedule";
 import { format, addDays, parse } from "date-fns";
 import AssignedShiftsSection from "@/components/shifts/AssignedShiftsSection";
 import CalendarCell from "@/components/shifts/CalendarCell";
+import { ANY } from "@/types";
 
 type ScheduleCalendarProps = {
     employees: Employee[];
@@ -12,6 +13,7 @@ type ScheduleCalendarProps = {
     onCreateShift?: (date?: Date, employeeId?: string) => void;
     onEditShift?: (shift: Shift) => void;
     hideUnassigned?: boolean;
+    availabilities?: { employeeId: string; availability: ANY }[];
 };
 
 export default function ScheduleCalendar({
@@ -22,6 +24,7 @@ export default function ScheduleCalendar({
     onEditShift,
     currentEmployeeId,
     userRole,
+    availabilities,
     hideUnassigned = false,
 }: ScheduleCalendarProps & { currentEmployeeId?: string; userRole?: string }) {
     // Generate week days array
@@ -124,6 +127,7 @@ export default function ScheduleCalendar({
                     onEditShift={onEditShift}
                     currentEmployeeId={currentEmployeeId}
                     userRole={userRole}
+                    availabilities={availabilities}
                 />
             </div>
         </div>

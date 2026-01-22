@@ -5,10 +5,15 @@ import { format } from "date-fns";
 import EmployeeCard from "./EmployeeCard";
 import CalendarCell from "./CalendarCell";
 
+import { IAvailability } from "@/server/models/Availability";
+// We need to be careful importing IAvailability in client component if it imports Mongoose. 
+// Usually interfaces are fine. If it fails, I'll extract interface.
+
 type AssignedShiftsSectionProps = {
     employees: Employee[];
     shifts: Shift[];
     weekDays: Date[];
+    availabilities?: { employeeId: string; availability: IAvailability | null }[];
     onCreateShift?: (date: string, employeeId?: string) => void;
     onEditShift?: (shift: Shift) => void;
 };
@@ -17,6 +22,7 @@ export default function AssignedShiftsSection({
     employees,
     shifts,
     weekDays,
+    availabilities,
     onCreateShift,
     onEditShift,
     currentEmployeeId,
@@ -52,11 +58,21 @@ export default function AssignedShiftsSection({
                                 const dateStr = formatDate(day);
                                 const employeeShifts = getShiftsForDate(dateStr, employee._id);
 
+                                const dayName = format(day, "EEEE");
+                                const empAvailability = availabilities?.find(a => a.employeeId === employee._id)?.availability;
+                                const dayConfig = empAvailability?.days?.find(d => d.day === dayName);
+
+                                const availabilityStatus = dayConfig ? {
+                                    isAvailable: dayConfig.isAvailable,
+                                    label: dayConfig.isAvailable ? `${dayConfig.startTime}-${dayConfig.endTime}` : undefined
+                                } : undefined;
+
                                 return (
                                     <CalendarCell
                                         key={index}
                                         shifts={employeeShifts}
                                         isAssigned={true}
+                                        availability={availabilityStatus}
                                         onCreateShift={
                                             onCreateShift
                                                 ? () => onCreateShift(dateStr, employee._id)
